@@ -23,6 +23,7 @@ def train_classifier(model, X_train, y_train, epochs, batch_size, lr, weight_dec
             logits = model(xb)
             loss = criterion(logits, yb)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
     return model
 
