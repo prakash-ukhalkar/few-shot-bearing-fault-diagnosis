@@ -13,6 +13,7 @@ import argparse
 import json
 
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 from src.data.splits import (
     cross_load_split,
@@ -43,6 +44,13 @@ def load_windows(processed_path: str):
 def run_classical(method, X_train, y_train, X_test, y_test, seed, fs):
     feat_train = extract_features_batch(X_train, fs=fs)
     feat_test = extract_features_batch(X_test, fs=fs)
+    if method == "svm":
+        # RBF-SVM is scale-sensitive; our hand-crafted features mix
+        # Hz-scale spectral values with unitless skew/kurtosis, so distances
+        # are dominated by the largest-magnitude feature without scaling.
+        scaler = StandardScaler()
+        feat_train = scaler.fit_transform(feat_train)
+        feat_test = scaler.transform(feat_test)
     model = build_svm(seed) if method == "svm" else build_random_forest(seed)
     model.fit(feat_train, y_train)
     y_pred = model.predict(feat_test)
@@ -63,9 +71,10 @@ def run_cnn1d(X_train, y_train, X_test, y_test, n_classes, cfg, seed):
 
 def run_lstm(X_train, y_train, X_test, y_test, n_classes, cfg, seed):
     model = ShallowLSTMClassifier(n_classes=n_classes)
+    epochs = cfg.get("lstm", {}).get("epochs", cfg["training"]["epochs"])
     model = train_classifier(
         model, X_train, y_train,
-        epochs=cfg["training"]["epochs"], batch_size=cfg["training"]["batch_size"],
+        epochs=epochs, batch_size=cfg["training"]["batch_size"],
         lr=cfg["training"]["learning_rate"], weight_decay=cfg["training"]["weight_decay"],
         device=cfg["training"]["device"],
     )
@@ -110,24 +119,36 @@ def run_simclr_linear(X_unlabeled, X_train, y_train, X_test, y_test, n_classes, 
             loss = nt_xent_loss(z1, z2, temperature=scfg["temperature"])
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
 
     # Linear probe on frozen encoder using the (scarce) labeled data.
+    # Precompute embeddings once (encoder is frozen) and train the probe
+    # with mini-batches so the number of gradient steps scales with the
+    # amount of labeled data, instead of a fixed handful of full-batch
+    # updates that stayed the same regardless of label fraction.
     for p in model.encoder.parameters():
         p.requires_grad = False
     linear = torch.nn.Linear(cfg["training"]["embedding_dim"], n_classes).to(device)
     lin_opt = torch.optim.Adam(linear.parameters(), lr=cfg["training"]["learning_rate"])
     X_train_t = torch.from_numpy(X_train.astype(np.float32))
     y_train_t = torch.from_numpy(y_train.astype(np.int64))
+
+    model.encoder.eval()
+    with torch.no_grad():
+        emb_train = model.encoder(X_train_t.to(device))
+    probe_batch_size = min(scfg["batch_size"], len(emb_train))
+    n_train = len(emb_train)
     for _ in range(scfg["linear_probe_epochs"]):
-        model.encoder.eval()
-        with torch.no_grad():
-            emb = model.encoder(X_train_t.to(device))
-        logits = linear(emb)
-        loss = torch.nn.functional.cross_entropy(logits, y_train_t.to(device))
-        lin_opt.zero_grad()
-        loss.backward()
-        lin_opt.step()
+        perm = torch.randperm(n_train)
+        for i in range(0, n_train, probe_batch_size):
+            idx = perm[i : i + probe_batch_size]
+            logits = linear(emb_train[idx])
+            loss = torch.nn.functional.cross_entropy(logits, y_train_t[idx].to(device))
+            lin_opt.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(linear.parameters(), max_norm=5.0)
+            lin_opt.step()
 
     with torch.no_grad():
         X_test_t = torch.from_numpy(X_test.astype(np.float32)).to(device)
