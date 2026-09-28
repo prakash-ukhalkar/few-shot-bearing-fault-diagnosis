@@ -1,0 +1,40 @@
+# Cross-load generalization experiment: train on loads 0-2 HP, test on
+# held-out load 3 HP, to evaluate robustness beyond same-condition overfitting.
+
+data:
+  raw_dir: data/raw/cwru
+  processed_path: data/processed/windows.npz
+  window_size: 1024
+  stride: 512
+  channel: DE
+  sampling_rate_hz: 12000
+
+experiment:
+  label_fractions: [0.05, 0.10, 0.25, 0.50, 1.00]
+  seeds: [0, 1, 2, 3, 4]
+  methods:
+    - svm
+    - random_forest
+    - cnn1d
+    - lstm
+    - protonet
+    - simclr_linear
+
+cross_load:
+  enabled: true
+  train_loads: [0, 1, 2]
+  test_loads: [3]
+
+training:
+  batch_size: 64
+  epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  embedding_dim: 64
+  device: cpu
+
+output:
+  results_dir: results/cross_load
+  figures_dir: results/cross_load/figures
+  tables_dir: results/cross_load/tables
+  models_dir: results/cross_load/models

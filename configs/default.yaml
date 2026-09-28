@@ -1,0 +1,60 @@
+# Default experiment configuration for few-shot bearing fault diagnosis.
+
+data:
+  raw_dir: data/raw/cwru
+  processed_path: data/processed/windows.npz
+  window_size: 1024
+  stride: 512
+  channel: DE
+  sampling_rate_hz: 12000
+
+experiment:
+  label_fractions: [0.05, 0.10, 0.25, 0.50, 1.00]
+  seeds: [0, 1, 2, 3, 4]
+  test_size: 0.3
+  methods:
+    - svm
+    - random_forest
+    - cnn1d
+    - lstm
+    - protonet
+    - simclr_linear
+
+cross_load:
+  enabled: true
+  train_loads: [0, 1, 2]
+  test_loads: [3]
+
+training:
+  batch_size: 64
+  epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  embedding_dim: 64
+  device: cpu
+
+protonet:
+  n_way: 10
+  n_support: 5
+  n_query: 15
+  episodes_per_epoch: 100
+  epochs: 20
+
+simclr:
+  epochs: 40
+  batch_size: 64
+  temperature: 0.5
+  projection_dim: 32
+  linear_probe_epochs: 20
+
+masked_reconstruction:
+  epochs: 40
+  batch_size: 64
+  mask_ratio: 0.15
+  span_len: 32
+
+output:
+  results_dir: results
+  figures_dir: results/figures
+  tables_dir: results/tables
+  models_dir: results/models
