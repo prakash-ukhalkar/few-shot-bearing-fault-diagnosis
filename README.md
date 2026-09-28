@@ -202,6 +202,5 @@ If this repository is useful in your work, please cite it as:
 ### Author
 
 **Prakash Ukhalkar**
-[GitHub @prakash-ukhalkar](https://github.com/prakash-ukhalkar) · [learntech.fun@gmail.com](mailto:learntech.fun@gmail.com)
-
+[GitHub @prakash-ukhalkar](https://github.com/prakash-ukhalkar)
 </div>
