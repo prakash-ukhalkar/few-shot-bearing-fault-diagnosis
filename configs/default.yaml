@@ -21,31 +21,38 @@ experiment:
     - simclr_linear
 
 cross_load:
-  enabled: true
+  enabled: false
   train_loads: [0, 1, 2]
   test_loads: [3]
 
 training:
   batch_size: 64
-  epochs: 30
+  epochs: 20
   learning_rate: 0.001
   weight_decay: 0.0001
   embedding_dim: 64
   device: cpu
 
+lstm:
+  # Plain LSTMs converge much slower than the CNN backbone (weaker inductive
+  # bias for this task) and were observed to collapse to majority-class
+  # prediction within the shared 20-epoch budget, especially at low label
+  # fractions. Give it a larger, dedicated epoch budget.
+  epochs: 80
+
 protonet:
   n_way: 10
   n_support: 5
   n_query: 15
-  episodes_per_epoch: 100
-  epochs: 20
+  episodes_per_epoch: 50
+  epochs: 10
 
 simclr:
-  epochs: 40
+  epochs: 10
   batch_size: 64
   temperature: 0.5
   projection_dim: 32
-  linear_probe_epochs: 20
+  linear_probe_epochs: 40
 
 masked_reconstruction:
   epochs: 40
